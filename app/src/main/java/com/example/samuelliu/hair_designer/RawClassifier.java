@@ -1,16 +1,24 @@
 package com.example.samuelliu.hair_designer;
+        import android.content.Context;
+        import android.util.Log;
+
         import org.opencv.core.*;
         import org.opencv.core.Core;
         import org.opencv.imgcodecs.Imgcodecs;
         import org.opencv.imgproc.Imgproc;
         import org.opencv.objdetect.CascadeClassifier;
 
+        import java.io.File;
+        import java.io.FileOutputStream;
+        import java.io.IOException;
+        import java.io.InputStream;
+
 public class RawClassifier {
     private Mat my_image = null;
     private String filename = null;
     private Rect my_facerect = null;
     private ColorRecg_YCrCb face_color_whithin = null;
-    private String classifier_path = "./classifier_data/haarcascade_frontalface_default.xml";
+    private String classifier_path = "./haarcascade_frontalface_default.xml";
     public RawClassifier(String in_file){
         filename = in_file;
         System.loadLibrary( Core.NATIVE_LIBRARY_NAME );
@@ -19,10 +27,11 @@ public class RawClassifier {
     }
     public RawClassifier(Mat in_image){
         filename = "UNUSED";
-        System.loadLibrary( Core.NATIVE_LIBRARY_NAME );
+        //System.loadLibrary( Core.NATIVE_LIBRARY_NAME );
         my_image = in_image.clone();
         my_facerect = null;
     }
+    private static final String TAG = "OCVSample::Activity";
 
     //This function is responsible for detecting the rough range of the face.
     public Rect face_rect(){
@@ -33,7 +42,38 @@ public class RawClassifier {
         if(my_facerect != null)
             return my_facerect;
         //start the detecting
+        DetectionBasedTracker mNativeDetector;
+        File mCascadeFile;
+        CascadeClassifier mJavaDetector;
         System.out.println("\nRunning DetectFaceDemo");
+        try {
+            InputStream is = getResources().openRawResource(R.raw.haarcascade_frontalface_default);
+            File cascadeDir = getDir("cascade" , Context.MODE_PRIVATE);
+            mCascadeFile = new File(cascadeDir , "haarcascade_frontalface_default.xml");
+            FileOutputStream os = new FileOutputStream(mCascadeFile);
+
+            byte[] buffer = new byte[4096];
+            int bytesRead;
+            while ( (bytesRead = is.read(buffer)) != -1 ){
+                os.write(buffer , 0 , bytesRead);
+            }
+            is.close();
+            os.close();
+
+            mJavaDetector = new CascadeClassifier(mCascadeFile.getAbsolutePath());
+            if ( mJavaDetector.empty() ) {
+                Log.e(TAG, "Failed to load cascade classifier");
+                mJavaDetector = null;
+            }else
+                Log.i(TAG , "LOaded cascade classifier from" + mCascadeFile.getAbsolutePath());
+
+            mNativeDetector = new DetectionBasedTracker(mCascadeFile.getAbsolutePath() , 0);
+
+            cascadeDir.delete( );
+        } catch (IOException e){
+            e.printStackTrace();
+            Log.e(TAG , "Failed to load cascade. Exception thrown: " + e);
+        }
         CascadeClassifier face_rect_dtect = new CascadeClassifier(classifier_path);
         MatOfRect face_rect_out = new MatOfRect();
         face_rect_dtect.detectMultiScale(my_image, face_rect_out);
